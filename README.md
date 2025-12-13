@@ -1,38 +1,7 @@
-Türkçe açıklama için bkz: BENIOKU.md
-
 # x86-manpages
 
-This is a man page documentation for x86-64 ISA. Instructions are available with e.g:
-
-```
-man x86-jmp
-man x86-call
-```
-
-<p align="center">
-  <img src="ss.png" align="middle">
-</p>
-
-
-See `x86-manpages(7)` for a list of instructions.
-
-## Installation
-
-### Manually
-```
-$ git clone https://github.com/ttmo-O/x86-manpages && cd x86-manpages
-# mkdir /usr/local/man/man7
-# cp man7/* /usr/local/man/man7/
-```
-or add "x86-manpages" root directory to your `MANPATH` environment variable.
-
-### Using AUR
-
-You can use AUR to get [x86-manpages-git](https://aur.archlinux.org/packages/x86-manpages-git/) package.
-
-### Using NIX
-
-Nix derivation is available via [https://github.com/blitz/x86-manpages-nix](https://github.com/blitz/x86-manpages-nix).
+Clone this repository, add the directory `manx86` to `MANPATH`, and `x86` to `MANSECT`.
+Now, you can access the manpages via `man x86 <instruction>`.
 
 ## Methodology
 
