@@ -1,0 +1,202 @@
+'\" t
+.nh
+.TH "X86-SQRTPD" "7" "May 2019" "TTMO" "Intel x86-64 ISA Manual"
+.SH NAME
+SQRTPD - SQUARE ROOT OF DOUBLE PRECISION FLOATING-POINT VALUES
+.TS
+allbox;
+l l l l l 
+l l l l l .
+\fBOpcode/Instruction\fP	\fBOp / En\fP	\fB64/32 bit Mode Support\fP	\fBCPUID Feature Flag\fP	\fBDescription\fP
+T{
+66 0F 51 /r SQRTPD xmm1, xmm2/m128
+T}	A	V/V	SSE2	T{
+Computes Square Roots of the packed double precision floating-point values in xmm2/m128 and stores the result in xmm1.
+T}
+T{
+VEX.128.66.0F.WIG 51 /r VSQRTPD xmm1, xmm2/m128
+T}	A	V/V	AVX	T{
+Computes Square Roots of the packed double precision floating-point values in xmm2/m128 and stores the result in xmm1.
+T}
+T{
+VEX.256.66.0F.WIG 51 /r VSQRTPD ymm1, ymm2/m256
+T}	A	V/V	AVX	T{
+Computes Square Roots of the packed double precision floating-point values in ymm2/m256 and stores the result in ymm1.
+T}
+T{
+EVEX.128.66.0F.W1 51 /r VSQRTPD xmm1 {k1}{z}, xmm2/m128/m64bcst
+T}	B	V/V	AVX512VL AVX512F	T{
+Computes Square Roots of the packed double precision floating-point values in xmm2/m128/m64bcst and stores the result in xmm1 subject to writemask k1.
+T}
+T{
+EVEX.256.66.0F.W1 51 /r VSQRTPD ymm1 {k1}{z}, ymm2/m256/m64bcst
+T}	B	V/V	AVX512VL AVX512F	T{
+Computes Square Roots of the packed double precision floating-point values in ymm2/m256/m64bcst and stores the result in ymm1 subject to writemask k1.
+T}
+T{
+EVEX.512.66.0F.W1 51 /r VSQRTPD zmm1 {k1}{z}, zmm2/m512/m64bcst{er}
+T}	B	V/V	AVX512F	T{
+Computes Square Roots of the packed double precision floating-point values in zmm2/m512/m64bcst and stores the result in zmm1 subject to writemask k1.
+T}
+.TE
+
+.SH INSTRUCTION OPERAND ENCODING
+.TS
+allbox;
+l l l l l l 
+l l l l l l .
+\fBOp/En\fP	\fBTuple Type\fP	\fBOperand 1\fP	\fBOperand 2\fP	\fBOperand 3\fP	\fBOperand 4\fP
+A	N/A	ModRM:reg (w)	ModRM:r/m (r)	N/A	N/A
+B	Full	ModRM:reg (w)	ModRM:r/m (r)	N/A	N/A
+.TE
+
+.SH DESCRIPTION
+Performs a SIMD computation of the square roots of the two, four or
+eight packed double precision floating-point values in the source
+operand (the second operand) stores the packed double precision
+floating-point results in the destination operand (the first operand).
+
+.PP
+EVEX encoded versions: The source operand is a ZMM/YMM/XMM register, a
+512/256/128-bit memory location, or a 512/256/128-bit vector broadcasted
+from a 64-bit memory location. The destination operand is a ZMM/YMM/XMM
+register updated according to the writemask.
+
+.PP
+VEX.256 encoded version: The source operand is a YMM register or a
+256-bit memory location. The destination operand is a YMM register. The
+upper bits (MAXVL-1:256) of the corresponding ZMM register destination
+are zeroed.
+
+.PP
+VEX.128 encoded version: the source operand second source operand or a
+128-bit memory location. The destination operand is an XMM register. The
+upper bits (MAXVL-1:128) of the corresponding ZMM register destination
+are zeroed.
+
+.PP
+128-bit Legacy SSE version: The second source can be an XMM register or
+128-bit memory location. The destination is not distinct from the first
+source XMM register and the upper bits (MAXVL-1:128) of the
+corresponding ZMM register destination are unmodified.
+
+.PP
+Note: VEX.vvvv and EVEX.vvvv are reserved and must be 1111b otherwise
+instructions will #UD.
+
+.SH OPERATION
+.SS VSQRTPD (EVEX Encoded Versions)
+.EX
+(KL, VL) = (2, 128), (4, 256), (8, 512)
+IF (VL = 512) AND (EVEX.b = 1) AND (SRC *is register*)
+    THEN
+        SET_ROUNDING_MODE_FOR_THIS_INSTRUCTION(EVEX.RC);
+    ELSE
+        SET_ROUNDING_MODE_FOR_THIS_INSTRUCTION(MXCSR.RC);
+FI;
+FOR j := 0 TO KL-1
+    i := j * 64
+    IF k1[j] OR *no writemask* THEN
+            IF (EVEX.b = 1) AND (SRC *is memory*)
+                THEN DEST[i+63:i] := SQRT(SRC[63:0])
+                ELSE DEST[i+63:i] := SQRT(SRC[i+63:i])
+            FI;
+        ELSE
+            IF *merging-masking* ; merging-masking
+                THEN *DEST[i+63:i] remains unchanged*
+                ELSE ; zeroing-masking
+                    DEST[i+63:i] := 0
+            FI
+    FI;
+ENDFOR
+DEST[MAXVL-1:VL] := 0
+.EE
+
+.SS VSQRTPD (VEX.256 Encoded Version)
+.EX
+DEST[63:0] := SQRT(SRC[63:0])
+DEST[127:64] := SQRT(SRC[127:64])
+DEST[191:128] := SQRT(SRC[191:128])
+DEST[255:192] := SQRT(SRC[255:192])
+DEST[MAXVL-1:256] := 0
+\&.
+.EE
+
+.SS VSQRTPD (VEX.128 Encoded Version)
+.EX
+DEST[63:0] := SQRT(SRC[63:0])
+DEST[127:64] := SQRT(SRC[127:64])
+DEST[MAXVL-1:128] := 0
+.EE
+
+.SS SQRTPD (128-bit Legacy SSE Version)
+.EX
+DEST[63:0] := SQRT(SRC[63:0])
+DEST[127:64] := SQRT(SRC[127:64])
+DEST[MAXVL-1:128] (Unmodified)
+.EE
+
+.SH INTEL C/C++ COMPILER INTRINSIC EQUIVALENT
+.EX
+VSQRTPD __m512d _mm512_sqrt_round_pd(__m512d a, int r);
+
+VSQRTPD __m512d _mm512_mask_sqrt_round_pd(__m512d s, __mmask8 k, __m512d a, int r);
+
+VSQRTPD __m512d _mm512_maskz_sqrt_round_pd( __mmask8 k, __m512d a, int r);
+
+VSQRTPD __m256d _mm256_sqrt_pd (__m256d a);
+
+VSQRTPD __m256d _mm256_mask_sqrt_pd(__m256d s, __mmask8 k, __m256d a, int r);
+
+VSQRTPD __m256d _mm256_maskz_sqrt_pd( __mmask8 k, __m256d a, int r);
+
+SQRTPD __m128d _mm_sqrt_pd (__m128d a);
+
+VSQRTPD __m128d _mm_mask_sqrt_pd(__m128d s, __mmask8 k, __m128d a, int r);
+
+VSQRTPD __m128d _mm_maskz_sqrt_pd( __mmask8 k, __m128d a, int r);
+.EE
+
+.SH SIMD FLOATING-POINT EXCEPTIONS
+Invalid, Precision, Denormal.
+
+.SH OTHER EXCEPTIONS
+Non-EVEX-encoded instruction, see Table
+2-19, “Type 2 Class Exception Conditions,” additionally:
+
+.TS
+allbox;
+l l 
+l l .
+\fB\fP	\fB\fP
+#UD	If VEX.vvvv != 1111B.
+.TE
+
+.PP
+EVEX-encoded instruction, see Table
+2-46, “Type E2 Class Exception Conditions,” additionally:
+
+.TS
+allbox;
+l l 
+l l .
+\fB\fP	\fB\fP
+#UD	If EVEX.vvvv != 1111B.
+.TE
+
+.SH SEE ALSO
+x86-manpages(7) for a list of other x86-64 man pages.
+
+.SH COLOPHON
+This UNOFFICIAL, mechanically-separated, non-verified reference is
+provided for convenience, but it may be
+incomplete or
+broken in various obvious or non-obvious ways.
+Refer to Intel® 64 and IA-32 Architectures Software Developer’s Manual
+for anything serious.
+
+.br
+This page is generated by scripts; therefore may contain visual or semantical bugs. Please report them (or better, fix them) on https://github.com/ttmo-O/x86-manpages.
+
+.br
+MIT licensed by TTMO 2025 (Turkish Unofficial Chamber of Reverse Engineers - https://ttmo.re).

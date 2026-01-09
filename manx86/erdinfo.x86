@@ -1,0 +1,387 @@
+'\" t
+.nh
+.TH "X86-ERDINFO" "7" "May 2019" "TTMO" "Intel x86-64 ISA Manual"
+.SH NAME
+ERDINFO - READ TYPE AND STATUS INFORMATION ABOUT AN EPC PAGE
+.TS
+allbox;
+l l l l l 
+l l l l l .
+\fBOpcode/Instruction\fP	\fBOp/En\fP	\fB64/32 bit Mode Support\fP	\fBCPUID Feature Flag\fP	\fBDescription\fP
+EAX = 10H ENCLS[ERDINFO]	IR	V/V	EAX[6]	T{
+This leaf function returns type and status information about an EPC page.
+T}
+.TE
+
+.SH INSTRUCTION OPERAND ENCODING
+.TS
+allbox;
+l l l l l 
+l l l l l .
+\fB\fP	\fB\fP	\fB\fP	\fB\fP	\fB\fP
+Op/En	EAX		RBX	RCX
+IR	ERDINFO (In)	Return error code (Out)	T{
+Address of a RDINFO structure (In)
+T}	T{
+Address of the destination EPC page (In)
+T}
+.TE
+
+.SS Description
+This instruction reads type and status information about an EPC page and
+returns it in a RDINFO structure. The STATUS field of the structure
+describes the status of the page and determines the validity of the
+remaining fields. The FLAGS field returns the EPCM permissions of the
+page; the page type; and the BLOCKED, PENDING, MODIFIED, and PR status
+of the page. For enclave pages, the ENCLAVECONTEXT field of the
+structure returns the value of SECS.ENCLAVECONTEXT. For non-enclave
+pages (e.g., VA) ENCLAVECONTEXT returns 0.
+
+.PP
+For invalid or non-EPC pages, the instruction returns an information
+code indicating the page's status, in addition to populating the STATUS
+field.
+
+.PP
+ERDINFO returns an error code if the destination EPC page is being
+modified by a concurrent SGX instruction.
+
+.PP
+RBX contains the effective address of a RDINFO structure while RCX
+contains the effective address of an EPC page. The table below provides
+additional information on the memory parameter of ERDINFO leaf function.
+
+.SH ERDINFO MEMORY PARAMETER SEMANTICS
+.TS
+allbox;
+l l 
+l l .
+\fB\fP	\fB\fP
+RDINFO	EPCPAGE
+T{
+Read/Write access permitted by Non Enclave
+T}	T{
+Read access permitted by Enclave
+T}
+.TE
+
+.PP
+The instruction faults if any of the following:
+
+.SH ERDINFO FAULTING CONDITIONS
+.TS
+allbox;
+l l 
+l l .
+\fB\fP	\fB\fP
+T{
+A memory operand effective address is outside the DS segment limit (32b mode).
+T}	T{
+A memory operand is not properly aligned.
+T}
+T{
+DS segment is unusable (32b mode).
+T}	T{
+A page fault occurs in accessing memory operands.
+T}
+T{
+A memory address is in a non-canonical form (64b mode).
+T}	
+.TE
+
+.PP
+The error codes are:
+
+.SS Concurrency Restrictions
+.SS Operation
+.SH TEMP VARIABLES IN ERDINFO OPERATIONAL FLOW
+.TS
+allbox;
+l 
+l .
+\fBName Type Size (Bits) Description\fP
+TMP_SECS Physical Address 64 Physical address of the SECS of the page being modified.
+TMP_RDINFO Linear Address 64 Address of the RDINFO structure.
+.TE
+
+.PP
+(* check alignment of RDINFO structure (RBX) *)
+
+.PP
+IF (DS:RBX is not 32Byte Aligned) THEN
+
+.PP
+#GP(0); FI;
+
+.PP
+(* check alignment of the EPCPAGE (RCX) *)
+
+.PP
+IF (DS:RCX is not 4KByte Aligned) THEN
+
+.PP
+#GP(0); FI;
+
+.PP
+(* check that EPCPAGE (DS:RCX) is the address of an EPC page *)
+
+.PP
+IF (DS:RCX does not resolve within EPC) THEN
+
+.PP
+RFLAGS.CF := 1;
+
+.PP
+RFLAGS.ZF := 0;
+
+.PP
+RAX := SGX_PG_NONEPC;
+
+.PP
+goto DONE;
+
+.PP
+FI;
+
+.PP
+(* Check the EPC page for concurrency *)
+
+.PP
+IF (EPC page is being modified) THEN
+
+.PP
+RFLAGS.ZF = 1;
+
+.PP
+RFLAGS.CF = 0;
+
+.PP
+RAX = SGX_EPC_PAGE_CONFLICT;
+
+.PP
+goto DONE;
+
+.PP
+FI;
+
+.PP
+(* check page validity *)
+
+.PP
+IF (EPCM(DS:RCX).VALID = 0) THEN
+
+.PP
+RFLAGS.CF = 1;
+
+.PP
+RFLAGS.ZF = 0;
+
+.PP
+RAX = SGX_PG_INVLD;
+
+.PP
+goto DONE;
+
+.PP
+FI;
+
+.PP
+(* clear the fields of the RDINFO structure *)
+
+.PP
+TMP_RDINFO := DS:RBX;
+
+.PP
+TMP_RDINFO.STATUS := 0;
+
+.PP
+TMP_RDINFO.FLAGS := 0;
+
+.PP
+TMP_RDINFO.ENCLAVECONTEXT := 0;
+
+.PP
+(* store page info in RDINFO structure *)
+
+.PP
+TMP_RDINFO.FLAGS.RWX := EPCM(DS:RCX).RWX;
+
+.PP
+TMP_RDINFO.FLAGS.PENDING := EPCM(DS:RCX).PENDING;
+
+.PP
+TMP_RDINFO.FLAGS.MODIFIED := EPCM(DS:RCX).MODIFIED;
+
+.PP
+TMP_RDINFO.FLAGS.PR := EPCM(DS:RCX).PR;
+
+.PP
+TMP_RDINFO.FLAGS.PAGE_TYPE := EPCM(DS:RCX).PAGE_TYPE;
+
+.PP
+TMP_RDINFO.FLAGS.BLOCKED := EPCM(DS:RCX).BLOCKED;
+
+.PP
+(* read SECS.ENCLAVECONTEXT for enclave child pages *)
+
+.PP
+IF ((EPCM(DS:RCX).PAGE_TYPE = PT_REG) or
+
+.PP
+(EPCM(DS:RCX).PAGE_TYPE = PT_TCS) or
+
+.PP
+(EPCM(DS:RCX).PAGE_TYPE = PT_TRIM) or
+
+.PP
+(EPCM(DS:RCX).PAGE_TYPE = PT_SS_FIRST) or
+
+.PP
+(EPCM(DS:RCX).PAGE_TYPE = PT_SS_REST)
+
+.PP
+) THEN
+
+.PP
+TMP_SECS := Address of SECS for (DS:RCX);
+
+.PP
+TMP_RDINFO.ENCLAVECONTEXT := SECS(TMP_SECS).ENCLAVECONTEXT;
+
+.PP
+FI;
+
+.PP
+(* populate enclave information for SECS pages *)
+
+.PP
+IF (EPCM(DS:RCX).PAGE_TYPE = PT_SECS) THEN
+
+.PP
+IF ((VMX non-root mode) and
+
+.PP
+(ENABLE_EPC_VIRTUALIZATION_EXTENSIONS Execution Control = 1)
+
+.PP
+) THEN
+
+.PP
+TMP_RDINFO.STATUS.CHILDPRESENT :=
+
+.PP
+((SECS(DS:RCX).CHLDCNT ≠ 0) or
+
+.PP
+SECS(DS:RCX).VIRTCHILDCNT ≠ 0);
+
+.PP
+ELSE
+
+.PP
+TMP_RDINFO.STATUS.CHILDPRESENT := (SECS(DS:RCX).CHLDCNT ≠ 0);
+
+.PP
+TMP_RDINFO.STATUS.VIRTCHILDPRESENT :=
+
+.PP
+(SECS(DS:RCX).VIRTCHILDCNT ≠ 0);
+
+.PP
+TMP_RDINFO.ENCLAVECONTEXT := SECS(DS_RCX).ENCLAVECONTEXT;
+
+.PP
+FI;
+
+.PP
+FI;
+
+.PP
+RAX := 0;
+
+.PP
+RFLAGS.ZF := 0;
+
+.PP
+RFLAGS.CF := 0;
+
+.PP
+DONE:
+
+.PP
+(* clear flags *)
+
+.PP
+RFLAGS.PF := 0;
+
+.PP
+RFLAGS.AF := 0;
+
+.PP
+RFLAGS.OF := 0;
+
+.PP
+RFLAGS.SF := ?0;
+
+.SS Flags Affected
+ZF is set if ERDINFO fails due to concurrent operation with another SGX
+instruction; otherwise cleared.
+
+.PP
+CF is set if page is not a valid EPC page or not an EPC page; otherwise
+cleared.
+
+.PP
+PF, AF, OF, and SF are cleared.
+
+.SS Protected Mode Exceptions
+.TS
+allbox;
+l l 
+l l .
+\fB\fP	\fB\fP
+#GP(0)	T{
+If a memory operand effective address is outside the DS segment limit.
+T}
+	If DS segment is unusable.
+	T{
+If a memory operand is not properly aligned.
+T}
+#PF(error	T{
+code) If a page fault occurs in accessing memory operands.
+T}
+.TE
+
+.SS 64-Bit Mode Exceptions
+.TS
+allbox;
+l l 
+l l .
+\fB\fP	\fB\fP
+#GP(0)	T{
+If the memory address is in a non-canonical form.
+T}
+	T{
+If a memory operand is not properly aligned.
+T}
+#PF(error	T{
+code) If a page fault occurs in accessing memory operands.
+T}
+.TE
+
+.SH SEE ALSO
+x86-manpages(7) for a list of other x86-64 man pages.
+
+.SH COLOPHON
+This UNOFFICIAL, mechanically-separated, non-verified reference is
+provided for convenience, but it may be
+incomplete or
+broken in various obvious or non-obvious ways.
+Refer to Intel® 64 and IA-32 Architectures Software Developer’s Manual
+for anything serious.
+
+.br
+This page is generated by scripts; therefore may contain visual or semantical bugs. Please report them (or better, fix them) on https://github.com/ttmo-O/x86-manpages.
+
+.br
+MIT licensed by TTMO 2025 (Turkish Unofficial Chamber of Reverse Engineers - https://ttmo.re).

@@ -1,0 +1,163 @@
+'\" t
+.nh
+.TH "X86-VSCALEFPD" "7" "May 2019" "TTMO" "Intel x86-64 ISA Manual"
+.SH NAME
+VSCALEFPD - SCALE PACKED FLOAT64 VALUES WITH FLOAT64 VALUES
+.TS
+allbox;
+l l l l l 
+l l l l l .
+\fBOpcode/Instruction\fP	\fBOp/En\fP	\fB64/32 bit Mode Support\fP	\fBCPUID Feature Flag\fP	\fBDescription\fP
+T{
+EVEX.128.66.0F38.W1 2C /r VSCALEFPD xmm1 {k1}{z}, xmm2, xmm3/m128/m64bcst
+T}	A	V/V	AVX512VL AVX512F	T{
+Scale the packed double precision floating-point values in xmm2 using values from xmm3/m128/m64bcst. Under writemask k1.
+T}
+T{
+EVEX.256.66.0F38.W1 2C /r VSCALEFPD ymm1 {k1}{z}, ymm2, ymm3/m256/m64bcst
+T}	A	V/V	AVX512VL AVX512F	T{
+Scale the packed double precision floating-point values in ymm2 using values from ymm3/m256/m64bcst. Under writemask k1.
+T}
+T{
+EVEX.512.66.0F38.W1 2C /r VSCALEFPD zmm1 {k1}{z}, zmm2, zmm3/m512/m64bcst{er}
+T}	A	V/V	AVX512F	T{
+Scale the packed double precision floating-point values in zmm2 using values from zmm3/m512/m64bcst. Under writemask k1.
+T}
+.TE
+
+.SH INSTRUCTION OPERAND ENCODING
+.TS
+allbox;
+l l l l l l 
+l l l l l l .
+\fBOp/En\fP	\fBTuple Type\fP	\fBOperand 1\fP	\fBOperand 2\fP	\fBOperand 3\fP	\fBOperand 4\fP
+A	Full	ModRM:reg (w)	EVEX.vvvv (r)	ModRM:r/m (r)	N/A
+.TE
+
+.SS Description
+Performs a floating-point scale of the packed double precision
+floating-point values in the first source operand by multiplying them by
+2 to the power of the double precision floating-point values in second
+source operand.
+
+.PP
+The equation of this operation is given by:
+
+.PP
+zmm1 := zmm2*2floor(zmm3).
+
+.PP
+Floor(zmm3) means maximum integer value ≤ zmm3.
+
+.PP
+If the result cannot be represented in double precision, then the proper
+overflow response (for positive scaling operand), or the proper
+underflow response (for negative scaling operand) is issued. The
+overflow and underflow responses are dependent on the rounding mode (for
+IEEE-compliant rounding), as well as on other settings in MXCSR
+(exception mask bits, FTZ bit), and on the SAE bit.
+
+.PP
+The first source operand is a ZMM/YMM/XMM register. The second source
+operand is a ZMM/YMM/XMM register, a 512/256/128-bit memory location or
+a 512/256/128-bit vector broadcasted from a 64-bit memory location. The
+destination operand is a ZMM/YMM/XMM register conditionally updated with
+writemask k1.
+
+.PP
+Handling of special-case input values are listed in Table 5-40.
+
+.SS Operation
+.EX
+SCALE(SRC1, SRC2)
+{
+TMP_SRC2 := SRC2
+TMP_SRC1 := SRC1
+IF (SRC2 is denormal AND MXCSR.DAZ) THEN TMP_SRC2=0
+IF (SRC1 is denormal AND MXCSR.DAZ) THEN TMP_SRC1=0
+/* SRC2 is a 64 bits floating-point value */
+DEST[63:0] := TMP_SRC1[63:0] * POW(2, Floor(TMP_SRC2[63:0]))
+}
+.EE
+
+.SS VSCALEFPD (EVEX encoded versions)
+.EX
+(KL, VL) = (2, 128), (4, 256), (8, 512)
+IF (VL = 512) AND (EVEX.b = 1) AND (SRC2 *is register*)
+    THEN
+        SET_ROUNDING_MODE_FOR_THIS_INSTRUCTION(EVEX.RC);
+    ELSE
+        SET_ROUNDING_MODE_FOR_THIS_INSTRUCTION(MXCSR.RC);
+FI;
+FOR j := 0 TO KL-1
+    i := j * 64
+    IF k1[j] OR *no writemask* THEN
+            IF (EVEX.b = 1) AND (SRC2 *is memory*)
+                THEN DEST[i+63:i] := SCALE(SRC1[i+63:i], SRC2[63:0]);
+                ELSE DEST[i+63:i] := SCALE(SRC1[i+63:i], SRC2[i+63:i]);
+            FI;
+        ELSE
+            IF *merging-masking* ; merging-masking
+                THEN *DEST[i+63:i] remains unchanged*
+                ELSE
+                        ; zeroing-masking
+                    DEST[i+63:i] := 0
+            FI
+    FI;
+ENDFOR
+DEST[MAXVL-1:VL] := 0
+.EE
+
+.SS Intel C/C++ Compiler Intrinsic Equivalent
+.EX
+VSCALEFPD __m512d _mm512_scalef_round_pd(__m512d a, __m512d b, int rounding);
+
+VSCALEFPD __m512d _mm512_mask_scalef_round_pd(__m512d s, __mmask8 k, __m512d a, __m512d b, int rounding);
+
+VSCALEFPD __m512d _mm512_maskz_scalef_round_pd(__mmask8 k, __m512d a, __m512d b, int rounding);
+
+VSCALEFPD __m512d _mm512_scalef_pd(__m512d a, __m512d b);
+
+VSCALEFPD __m512d _mm512_mask_scalef_pd(__m512d s, __mmask8 k, __m512d a, __m512d b);
+
+VSCALEFPD __m512d _mm512_maskz_scalef_pd(__mmask8 k, __m512d a, __m512d b);
+
+VSCALEFPD __m256d _mm256_scalef_pd(__m256d a, __m256d b);
+
+VSCALEFPD __m256d _mm256_mask_scalef_pd(__m256d s, __mmask8 k, __m256d a, __m256d b);
+
+VSCALEFPD __m256d _mm256_maskz_scalef_pd(__mmask8 k, __m256d a, __m256d b);
+
+VSCALEFPD __m128d _mm_scalef_pd(__m128d a, __m128d b);
+
+VSCALEFPD __m128d _mm_mask_scalef_pd(__m128d s, __mmask8 k, __m128d a, __m128d b);
+
+VSCALEFPD __m128d _mm_maskz_scalef_pd(__mmask8 k, __m128d a, __m128d b);
+.EE
+
+.SS SIMD Floating-Point Exceptions
+Overflow, Underflow, Invalid, Precision, Denormal (for Src1).
+
+.PP
+Denormal is not reported for Src2.
+
+.SS Other Exceptions
+See Table 2-46, “Type E2 Class
+Exception Conditions.”
+
+.SH SEE ALSO
+x86-manpages(7) for a list of other x86-64 man pages.
+
+.SH COLOPHON
+This UNOFFICIAL, mechanically-separated, non-verified reference is
+provided for convenience, but it may be
+incomplete or
+broken in various obvious or non-obvious ways.
+Refer to Intel® 64 and IA-32 Architectures Software Developer’s Manual
+for anything serious.
+
+.br
+This page is generated by scripts; therefore may contain visual or semantical bugs. Please report them (or better, fix them) on https://github.com/ttmo-O/x86-manpages.
+
+.br
+MIT licensed by TTMO 2025 (Turkish Unofficial Chamber of Reverse Engineers - https://ttmo.re).
